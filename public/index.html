@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificate Printing System</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1><i class="fas fa-certificate"></i> Certificate Printing System</h1>
+            <p>Upload certificate template and Excel file to generate personalized certificates</p>
+            
+            <div class="auth-section" id="authSection">
+                <div class="auth-status" id="authStatus">
+                    <span class="auth-text">Not connected to Google Drive</span>
+                    <button id="loginBtn" class="btn btn-google">
+                        <i class="fab fa-google"></i>
+                        Sign in with Google
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="upload-section">
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <div class="upload-group">
+                        <label for="certificateTemplate" class="upload-label">
+                            <i class="fas fa-image"></i>
+                            <span>Certificate Template</span>
+                            <small>Upload your certificate design (PNG, JPG, JPEG)</small>
+                        </label>
+                        <input type="file" id="certificateTemplate" name="certificateTemplate" accept="image/*" required>
+                        <div id="templatePreview" class="file-preview"></div>
+                    </div>
+
+                    <div class="upload-group">
+                        <label for="excelFile" class="upload-label">
+                            <i class="fas fa-file-excel"></i>
+                            <span>Excel File with Names</span>
+                            <small>Upload Excel file with names in the first column</small>
+                        </label>
+                        <input type="file" id="excelFile" name="excelFile" accept=".xlsx,.xls" required>
+                        <div id="excelPreview" class="file-preview"></div>
+                    </div>
+
+                    <div class="upload-group">
+                        <label class="upload-label">
+                            <i class="fas fa-mouse-pointer"></i>
+                            <span>Name Position Settings</span>
+                            <small>Adjust where the name will be printed on the certificate</small>
+                        </label>
+                        <div class="position-settings">
+                            <div class="position-controls">
+                                <div class="control-group">
+                                    <label for="nameX">X Position (% from left):</label>
+                                    <input type="range" id="nameX" min="0" max="100" value="50" class="slider">
+                                    <span id="nameXValue">50%</span>
+                                </div>
+                                <div class="control-group">
+                                    <label for="nameY">Y Position (% from top):</label>
+                                    <input type="range" id="nameY" min="0" max="100" value="50" class="slider">
+                                    <span id="nameYValue">50%</span>
+                                </div>
+                                <div class="control-group">
+                                    <label for="nameSize">Font Size:</label>
+                                    <input type="range" id="nameSize" min="12" max="120" value="48" class="slider">
+                                    <span id="nameSizeValue">48px</span>
+                                </div>
+                                <div class="control-group">
+                                    <label for="nameColor">Text Color:</label>
+                                    <input type="color" id="nameColor" value="#000000" class="color-picker">
+                                </div>
+                                <div class="control-group">
+                                    <label for="nameFont">Font Family:</label>
+                                    <select id="nameFont" class="font-select">
+                                        <option value="Arial">Arial</option>
+                                        <option value="Times New Roman">Times New Roman</option>
+                                        <option value="Helvetica">Helvetica</option>
+                                        <option value="Georgia">Georgia</option>
+                                        <option value="Verdana">Verdana</option>
+                                        <option value="Courier New">Courier New</option>
+                                        <option value="Impact">Impact</option>
+                                        <option value="Comic Sans MS">Comic Sans MS</option>
+                                        <option value="Trebuchet MS">Trebuchet MS</option>
+                                        <option value="Lucida Console">Lucida Console</option>
+                                        <option value="Palatino">Palatino</option>
+                                        <option value="Garamond">Garamond</option>
+                                        <option value="Bookman">Bookman</option>
+                                        <option value="Avant Garde">Avant Garde</option>
+                                        <option value="Century Gothic">Century Gothic</option>
+                                    </select>
+                                </div>
+                                <div class="control-group">
+                                    <label for="nameStyle">Font Style:</label>
+                                    <select id="nameStyle" class="font-select">
+                                        <option value="normal">Normal</option>
+                                        <option value="italic">Italic</option>
+                                        <option value="oblique">Oblique</option>
+                                    </select>
+                                </div>
+                                <div class="control-group">
+                                    <label for="nameWeight">Font Weight:</label>
+                                    <select id="nameWeight" class="font-select">
+                                        <option value="normal">Normal</option>
+                                        <option value="bold">Bold</option>
+                                        <option value="100">Thin (100)</option>
+                                        <option value="300">Light (300)</option>
+                                        <option value="400">Regular (400)</option>
+                                        <option value="500">Medium (500)</option>
+                                        <option value="600">Semi Bold (600)</option>
+                                        <option value="700">Bold (700)</option>
+                                        <option value="800">Extra Bold (800)</option>
+                                        <option value="900">Black (900)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="preview-container">
+                                <div class="preview-label">Preview:</div>
+                                <div id="certificatePreview" class="certificate-preview">
+                                    <div id="namePreview" class="name-preview">Sample Name</div>
+                                </div>
+                                <div class="current-settings" style="margin-top: 10px; font-size: 0.8rem; color: #666;">
+                                    <strong>Current Settings:</strong> 
+                                    X: <span id="currentX">50%</span>, 
+                                    Y: <span id="currentY">50%</span>, 
+                                    Size: <span id="currentSize">48px</span>, 
+                                    Color: <span id="currentColor">#000000</span>,
+                                    Font: <span id="currentFont">Arial</span>,
+                                    Style: <span id="currentStyle">normal</span>,
+                                    Weight: <span id="currentWeight">normal</span>
+                                </div>
+                                <div class="preview-buttons" style="margin-top: 10px;">
+                                    <button id="previewOnTemplate" class="btn btn-secondary">
+                                        <i class="fas fa-eye"></i>
+                                        Preview on Template
+                                    </button>
+                                    <button id="resetPosition" class="btn btn-secondary">
+                                        <i class="fas fa-undo"></i>
+                                        Reset Position
+                                    </button>
+                                    <button id="testPreview" class="btn btn-secondary">
+                                        <i class="fas fa-bug"></i>
+                                        Test Preview
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" id="generateBtn" class="btn btn-primary">
+                            <i class="fas fa-magic"></i>
+                            Generate Certificates
+                        </button>
+                        <button type="button" id="resetBtn" class="btn btn-secondary">
+                            <i class="fas fa-redo"></i>
+                            Reset
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="progress-section" id="progressSection" style="display: none;">
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">Processing...</div>
+                </div>
+            </div>
+
+            <div class="results-section" id="resultsSection" style="display: none;">
+                <h3><i class="fas fa-check-circle"></i> Certificates Generated Successfully!</h3>
+                <div class="results-info">
+                    <p id="resultsMessage"></p>
+                    <div class="uploaded-files" id="uploadedFiles"></div>
+                </div>
+            </div>
+
+            <div class="error-section" id="errorSection" style="display: none;">
+                <h3><i class="fas fa-exclamation-triangle"></i> Error</h3>
+                <p id="errorMessage"></p>
+            </div>
+        </main>
+
+        <div class="instructions">
+            <h3><i class="fas fa-info-circle"></i> Instructions</h3>
+            <div class="instruction-grid">
+                <div class="instruction-item">
+                    <i class="fas fa-image"></i>
+                    <h4>Certificate Template</h4>
+                    <p>Upload a high-quality image of your certificate design. The name will be printed in the center.</p>
+                </div>
+                <div class="instruction-item">
+                    <i class="fas fa-file-excel"></i>
+                    <h4>Excel File Format</h4>
+                    <p>Create an Excel file with names in the first column. The first row should be a header (e.g., "Name").</p>
+                </div>
+                <div class="instruction-item">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <h4>Google Drive Upload</h4>
+                    <p>Generated certificates will be automatically uploaded to your Google Drive folder.</p>
+                </div>
+                <div class="instruction-item">
+                    <i class="fas fa-download"></i>
+                    <h4>Download Certificates</h4>
+                    <p>Access your certificates through the provided Google Drive links after generation.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
