@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
 const session = require('express-session');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const app = express();
@@ -99,6 +100,22 @@ function getDriveInstance() {
         drive = google.drive({ version: 'v3', auth: oauth2Client });
     }
     return drive;
+}
+
+// Nodemailer SMTP Transporter helper
+function getMailTransporter() {
+    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+        return null;
+    }
+    return nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+        auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS
+        }
+    });
 }
 
 // Routes
@@ -241,30 +258,55 @@ app.post('/upload', upload.fields([
     { name: 'certificateTemplate', maxCount: 1 },
     { name: 'excelFile', maxCount: 1 }
 ]), async (req, res) => {
+    let templatePath = null;
+    let excelPath = null;
+    let generatedCertificates = [];
+
     try {
         if (!req.files.certificateTemplate || !req.files.excelFile) {
             return res.status(400).json({ error: 'Both certificate template and Excel file are required' });
         }
 
-        const templatePath = req.files.certificateTemplate[0].path;
-        const excelPath = req.files.excelFile[0].path;
+        templatePath = req.files.certificateTemplate[0].path;
+        excelPath = req.files.excelFile[0].path;
 
         // Read Excel file
         const workbook = XLSX.readFile(excelPath);
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const names = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-        // Extract names from first column (skip header if exists)
-        const certificateNames = names.slice(1).map(row => row[0]).filter(name => name);
+        // Extract recipients (Name from first column, Email from second column, skip header)
+        const recipients = rows.slice(1).map(row => {
+            const name = row[0] ? row[0].toString().trim() : '';
+            const email = row[1] ? row[1].toString().trim() : '';
+            return { name, email };
+        }).filter(recipient => recipient.name);
 
-        if (certificateNames.length === 0) {
+        if (recipients.length === 0) {
             return res.status(400).json({ error: 'No names found in Excel file' });
+        }
+
+        // Get email settings from request
+        const sendEmails = req.body.sendEmails === 'true';
+        const emailSubject = req.body.emailSubject || 'Your Certificate';
+        const emailBody = req.body.emailBody || 'Dear {name},\n\nPlease find your certificate attached.';
+
+        let transporter = null;
+        if (sendEmails) {
+            transporter = getMailTransporter();
+            if (!transporter) {
+                // Clean up before returning error
+                if (fs.existsSync(templatePath)) fs.unlinkSync(templatePath);
+                if (fs.existsSync(excelPath)) fs.unlinkSync(excelPath);
+                return res.status(400).json({
+                    error: 'Email sending is enabled, but SMTP is not configured in the server\'s .env file. Please configure SMTP_HOST, SMTP_USER, and SMTP_PASS.'
+                });
+            }
         }
 
         // Get position settings from form data
         console.log('Form body:', req.body);
-        console.log('Form files:', req.files);
         
         const nameX = parseFloat(req.body.nameX || 50);
         const nameY = parseFloat(req.body.nameY || 50);
@@ -273,12 +315,22 @@ app.post('/upload', upload.fields([
         const nameFont = req.body.nameFont || 'Arial';
         const nameStyle = req.body.nameStyle || 'normal';
         const nameWeight = req.body.nameWeight || 'normal';
-        
-        console.log('Position settings:', { nameX, nameY, nameSize, nameColor, nameFont, nameStyle, nameWeight });
+
+        // Check if user is authenticated with Google Drive
+        if (!req.session.tokens || !req.session.tokens.access_token) {
+            // Clean up before returning error
+            if (fs.existsSync(templatePath)) fs.unlinkSync(templatePath);
+            if (fs.existsSync(excelPath)) fs.unlinkSync(excelPath);
+            return res.status(401).json({ 
+                error: 'Google Drive authentication required. Please sign in with Google first.',
+                requiresAuth: true 
+            });
+        }
 
         // Generate certificates
+        const certificateNames = recipients.map(r => r.name);
         console.log('Generating certificates with settings:', { nameX, nameY, nameSize, nameColor, nameFont, nameStyle, nameWeight });
-        const generatedCertificates = await generateCertificates(templatePath, certificateNames, {
+        generatedCertificates = await generateCertificates(templatePath, certificateNames, {
             x: nameX,
             y: nameY,
             size: nameSize,
@@ -288,23 +340,66 @@ app.post('/upload', upload.fields([
             weight: nameWeight
         });
 
-        // Check if user is authenticated
-        if (!req.session.tokens || !req.session.tokens.access_token) {
-            return res.status(401).json({ 
-                error: 'Google Drive authentication required. Please sign in with Google first.',
-                requiresAuth: true 
+        // Set credentials from session and upload to Google Drive
+        oauth2Client.setCredentials(req.session.tokens);
+        const uploadedFiles = await uploadToGoogleDrive(generatedCertificates);
+
+        // Process email sending and build recipient results
+        const recipientResults = [];
+        for (let i = 0; i < recipients.length; i++) {
+            const recipient = recipients[i];
+            const certPath = generatedCertificates[i];
+            const driveFile = uploadedFiles[i];
+            
+            let emailStatus = 'Skipped (Email disabled)';
+            
+            if (sendEmails) {
+                if (!recipient.email) {
+                    emailStatus = 'Skipped (No email address)';
+                } else {
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (!emailRegex.test(recipient.email)) {
+                        emailStatus = 'Failed (Invalid email format)';
+                    } else {
+                        try {
+                            const subject = emailSubject.replace(/{name}/g, recipient.name);
+                            const text = emailBody.replace(/{name}/g, recipient.name);
+                            
+                            const mailOptions = {
+                                from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+                                to: recipient.email,
+                                subject: subject,
+                                text: text,
+                                attachments: [
+                                    {
+                                        filename: path.basename(certPath),
+                                        path: certPath
+                                    }
+                                ]
+                            };
+                            
+                            await transporter.sendMail(mailOptions);
+                            emailStatus = 'Sent';
+                        } catch (emailError) {
+                            console.error(`Failed to send email to ${recipient.email}:`, emailError);
+                            emailStatus = `Failed (${emailError.message})`;
+                        }
+                    }
+                }
+            }
+            
+            recipientResults.push({
+                name: recipient.name,
+                email: recipient.email || 'N/A',
+                driveLink: driveFile ? driveFile.link : '#',
+                driveFileId: driveFile ? driveFile.id : null,
+                emailStatus: emailStatus
             });
         }
 
-        // Set credentials from session
-        oauth2Client.setCredentials(req.session.tokens);
-
-        // Upload to Google Drive
-        const uploadedFiles = await uploadToGoogleDrive(generatedCertificates);
-
         // Clean up temporary files
-        fs.unlinkSync(templatePath);
-        fs.unlinkSync(excelPath);
+        if (fs.existsSync(templatePath)) fs.unlinkSync(templatePath);
+        if (fs.existsSync(excelPath)) fs.unlinkSync(excelPath);
         generatedCertificates.forEach(certPath => {
             if (fs.existsSync(certPath)) {
                 fs.unlinkSync(certPath);
@@ -313,12 +408,23 @@ app.post('/upload', upload.fields([
 
         res.json({
             success: true,
-            message: `${certificateNames.length} certificates generated and uploaded to Google Drive`,
-            uploadedFiles: uploadedFiles
+            message: `${recipients.length} certificates generated, uploaded to Google Drive${sendEmails ? ' and processed for emailing' : ''}`,
+            uploadedFiles: uploadedFiles,
+            recipientResults: recipientResults
         });
 
     } catch (error) {
         console.error('Error processing upload:', error);
+        // Clean up files on error
+        try {
+            if (templatePath && fs.existsSync(templatePath)) fs.unlinkSync(templatePath);
+            if (excelPath && fs.existsSync(excelPath)) fs.unlinkSync(excelPath);
+            generatedCertificates.forEach(certPath => {
+                if (fs.existsSync(certPath)) fs.unlinkSync(certPath);
+            });
+        } catch (cleanupError) {
+            console.error('Error cleaning up files on upload error:', cleanupError);
+        }
         res.status(500).json({ error: error.message });
     }
 });
@@ -355,10 +461,16 @@ async function generateCertificates(templatePath, names, positionSettings = {}) 
             ctx.drawImage(template, 0, 0);
             
             // Configure text style for the name
+            // Quote font families that contain spaces (e.g. "Times New Roman")
+            // so the canvas font-shorthand parser handles them correctly.
+            const fontFamily = settings.font.includes(' ')
+                ? `"${settings.font}"`
+                : settings.font;
+
             let fontString = '';
             if (settings.style !== 'normal') fontString += settings.style + ' ';
             if (settings.weight !== 'normal') fontString += settings.weight + ' ';
-            fontString += `${settings.size}px ${settings.font}`;
+            fontString += `${settings.size}px ${fontFamily}`;
             
             ctx.font = fontString;
             ctx.fillStyle = settings.color;

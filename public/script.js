@@ -18,6 +18,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const authStatus = document.getElementById('authStatus');
     const loginBtn = document.getElementById('loginBtn');
     
+    // Email settings elements
+    const sendEmailsCheckbox = document.getElementById('sendEmails');
+    const emailFieldsContainer = document.getElementById('emailFields');
+    const emailSubjectInput = document.getElementById('emailSubject');
+    const emailBodyInput = document.getElementById('emailBody');
+    const resultsTableBody = document.getElementById('resultsTableBody');
+
     // Position controls
     const nameX = document.getElementById('nameX');
     const nameY = document.getElementById('nameY');
@@ -29,7 +36,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const nameXValue = document.getElementById('nameXValue');
     const nameYValue = document.getElementById('nameYValue');
     const nameSizeValue = document.getElementById('nameSizeValue');
-    const namePreview = document.getElementById('namePreview');
+
+    // Canvas preview elements
+    const certificateCanvas = document.getElementById('certificateCanvas');
+    const canvasCtx = certificateCanvas.getContext('2d');
+    const canvasPlaceholder = document.getElementById('canvasPlaceholder');
+    let templateImage = null;
 
     // Check authentication status on page load
     checkAuthStatus();
@@ -37,20 +49,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle URL parameters for auth feedback
     const urlParams = new URLSearchParams(window.location.search);
     const authParam = urlParams.get('auth');
-    if (authParam === 'success') {
-        showAuthSuccess();
-    } else if (authParam === 'error') {
-        showAuthError();
-    } else if (authParam === 'logout') {
-        showAuthLogout();
-    }
+    if (authParam === 'success') showAuthSuccess();
+    else if (authParam === 'error')  showAuthError();
+    else if (authParam === 'logout') showAuthLogout();
 
-    // Google login button
-    loginBtn.addEventListener('click', function() {
+    // Google login button (re-bound after DOM update)
+    document.getElementById('loginBtn').addEventListener('click', () => {
         window.location.href = '/auth/google';
     });
 
-    // Position control event listeners
+    // Position / style control listeners
     nameX.addEventListener('input', updateNamePreview);
     nameY.addEventListener('input', updateNamePreview);
     nameSize.addEventListener('input', updateNamePreview);
@@ -59,23 +67,73 @@ document.addEventListener('DOMContentLoaded', function() {
     nameStyle.addEventListener('change', updateNamePreview);
     nameWeight.addEventListener('change', updateNamePreview);
 
-    // Preview on template button
+    // Color preset dots
+    document.querySelectorAll('.color-dot').forEach(dot => {
+        dot.addEventListener('click', () => {
+            nameColor.value = dot.dataset.color;
+            document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+            dot.classList.add('active');
+            updateNamePreview();
+        });
+    });
+
+    // Canvas action buttons
     document.getElementById('previewOnTemplate').addEventListener('click', previewOnTemplate);
-
-    // Reset position button
     document.getElementById('resetPosition').addEventListener('click', resetPosition);
-
-    // Test preview button
     document.getElementById('testPreview').addEventListener('click', testPreview);
 
-    // Initialize name preview
+    // Drag-over styles for dropzones
+    ['templateDropzone','excelDropzone'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-over'); });
+        el.addEventListener('dragleave',  () => el.classList.remove('drag-over'));
+        el.addEventListener('drop', e => {
+            e.preventDefault();
+            el.classList.remove('drag-over');
+            const input = el.nextElementSibling; // the hidden <input type="file">
+            if (input && e.dataTransfer.files.length) {
+                const dt = new DataTransfer();
+                dt.items.add(e.dataTransfer.files[0]);
+                input.files = dt.files;
+                input.dispatchEvent(new Event('change'));
+            }
+        });
+    });
+
+    // Load default template on start
+    loadDefaultTemplate();
+
+    // Initialize preview labels
     updateNamePreview();
+
+    // Email settings toggle
+    sendEmailsCheckbox.addEventListener('change', function() {
+        emailFieldsContainer.style.display = this.checked ? 'flex' : 'none';
+    });
 
     // File preview handlers
     certificateTemplateInput.addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (file) {
             showFilePreview(templatePreview, file, true);
+
+            // Load the image into memory for canvas redraws
+            const objectUrl = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = function() {
+                templateImage = img;
+                // Size canvas to full image resolution for pixel-perfect output
+                certificateCanvas.width  = img.naturalWidth;
+                certificateCanvas.height = img.naturalHeight;
+                // Show canvas, hide placeholder
+                certificateCanvas.style.display = 'block';
+                canvasPlaceholder.style.display  = 'none';
+                document.getElementById('previewHint').textContent =
+                    `${img.naturalWidth} × ${img.naturalHeight}px — drag sliders to position`;
+                drawCanvasPreview();
+            };
+            img.src = objectUrl;
         }
     });
 
@@ -91,8 +149,19 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         
         const formData = new FormData();
-        const certificateFile = certificateTemplateInput.files[0];
+        let certificateFile = certificateTemplateInput.files[0];
         const excelFile = excelFileInput.files[0];
+
+        if (!certificateFile && templateImage) {
+            // Fetch the default template image and convert to File
+            try {
+                const response = await fetch('printable-certificates-without-borders-3.jpg');
+                const blob = await response.blob();
+                certificateFile = new File([blob], 'printable-certificates-without-borders-3.jpg', { type: 'image/jpeg' });
+            } catch (err) {
+                console.error('Failed to load default template file:', err);
+            }
+        }
 
         if (!certificateFile || !excelFile) {
             showError('Please select both certificate template and Excel file.');
@@ -110,6 +179,11 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('nameFont', nameFont.value);
         formData.append('nameStyle', nameStyle.value);
         formData.append('nameWeight', nameWeight.value);
+
+        // Add email settings to form data
+        formData.append('sendEmails', sendEmailsCheckbox.checked);
+        formData.append('emailSubject', emailSubjectInput.value);
+        formData.append('emailBody', emailBodyInput.value);
 
         // Show progress and disable form
         showProgress();
@@ -206,14 +280,104 @@ document.addEventListener('DOMContentLoaded', function() {
         checkAuthStatus();
     }
 
-    // Update name preview function
+    // ── Core canvas renderer ──────────────────────────────────────────────────
+    // Mirrors server-side generateCertificates() exactly.
+    // IMPORTANT: we do NOT use save()/restore() here — those preserve stale
+    // font state across redraws and cause the canvas to silently ignore the
+    // new font assignment.  Instead we reset every property we touch
+    // explicitly at the start of every frame.
+    function drawCanvasPreview() {
+        if (!templateImage) return;
+
+        const W = certificateCanvas.width;
+        const H = certificateCanvas.height;
+
+        // ── Step 1: Reset ALL canvas text/shadow state before drawing ─────────
+        // Shadow must be cleared BEFORE setting ctx.font — some browsers
+        // re-validate the font property when shadow metrics change, and a
+        // dirty shadow state can cause the font assignment to be silently
+        // discarded.
+        canvasCtx.shadowColor   = 'transparent';
+        canvasCtx.shadowBlur    = 0;
+        canvasCtx.shadowOffsetX = 0;
+        canvasCtx.shadowOffsetY = 0;
+        canvasCtx.globalAlpha   = 1;
+        canvasCtx.globalCompositeOperation = 'source-over';
+
+        // ── Step 2: Draw certificate template background ──────────────────────
+        canvasCtx.clearRect(0, 0, W, H);
+        canvasCtx.drawImage(templateImage, 0, 0);
+
+        // ── Step 3: Build CSS font shorthand ──────────────────────────────────
+        // CSS font shorthand syntax:  [style] [weight] size family
+        // Rules the Canvas 2D API enforces:
+        //  • size (with px unit) and family are REQUIRED
+        //  • family names containing spaces MUST be quoted with double-quotes
+        //  • numeric weights (100–900) are valid, but must come before size
+        //  • if the browser can't parse the string it silently keeps the old font
+        const sizePx   = Math.max(8, parseInt(nameSize.value)  || 48);
+        const style    = nameStyle.value  || 'normal';
+        const weight   = nameWeight.value || 'normal';
+        const fontName = nameFont.value   || 'Arial';
+        const color    = nameColor.value  || '#000000';
+
+        // Quote multi-word families: "Times New Roman", "Comic Sans MS", etc.
+        const quotedFamily = fontName.includes(' ') ? `"${fontName}"` : fontName;
+
+        // Assemble: optional style → optional weight → size → family
+        const fontParts = [];
+        if (style  !== 'normal') fontParts.push(style);
+        if (weight !== 'normal') fontParts.push(weight);
+        fontParts.push(`${sizePx}px`);
+        fontParts.push(quotedFamily);
+        const cssFont = fontParts.join(' ');
+
+        // ── Step 4: Apply font FIRST, then check it was accepted ─────────────
+        canvasCtx.textAlign    = 'center';
+        canvasCtx.textBaseline = 'middle';
+        canvasCtx.font         = cssFont;
+
+        // Read back: if the browser rejected the string it reverts to the
+        // previous value.  Log both so DevTools shows what actually rendered.
+        const appliedFont = canvasCtx.font;
+        console.log(`[Preview] requested="${cssFont}"  applied="${appliedFont}"`);
+
+        // ── Step 5: Shadow (applied after font to avoid repaint conflicts) ─────
+        const dark = isColorDark(color);
+        canvasCtx.shadowColor   = dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.35)';
+        canvasCtx.shadowBlur    = Math.max(2, sizePx * 0.04);
+        canvasCtx.shadowOffsetX = 0;
+        canvasCtx.shadowOffsetY = 0;
+
+        // ── Step 6: Draw text ─────────────────────────────────────────────────
+        const px = (W * parseFloat(nameX.value)) / 100;
+        const py = (H * parseFloat(nameY.value)) / 100;
+        canvasCtx.fillStyle = color;
+        canvasCtx.fillText('Sample Name', px, py);
+
+        // Clear shadow so future clearRect / drawImage calls are clean
+        canvasCtx.shadowColor = 'transparent';
+        canvasCtx.shadowBlur  = 0;
+    }
+
+    // Returns true when a hex color is perceived as dark (WCAG relative luminance < 0.5)
+    function isColorDark(hex) {
+        const clean = hex.replace('#', '');
+        const r = parseInt(clean.substring(0, 2), 16) / 255;
+        const g = parseInt(clean.substring(2, 4), 16) / 255;
+        const b = parseInt(clean.substring(4, 6), 16) / 255;
+        const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        return luminance < 0.5;
+    }
+
+    // Update name preview — update labels + redraw canvas
     function updateNamePreview() {
-        const x = nameX.value;
-        const y = nameY.value;
-        const size = nameSize.value;
-        const color = nameColor.value;
-        const font = nameFont.value;
-        const style = nameStyle.value;
+        const x      = nameX.value;
+        const y      = nameY.value;
+        const size   = nameSize.value;
+        const color  = nameColor.value;
+        const font   = nameFont.value;
+        const style  = nameStyle.value;
         const weight = nameWeight.value;
 
         // Update display values
@@ -221,85 +385,37 @@ document.addEventListener('DOMContentLoaded', function() {
         nameYValue.textContent = y + '%';
         nameSizeValue.textContent = size + 'px';
 
-        // Update current settings display
-        document.getElementById('currentX').textContent = x + '%';
-        document.getElementById('currentY').textContent = y + '%';
-        document.getElementById('currentSize').textContent = size + 'px';
-        document.getElementById('currentColor').textContent = color;
-        document.getElementById('currentFont').textContent = font;
-        document.getElementById('currentStyle').textContent = style;
+        // Update current-settings readout
+        document.getElementById('currentX').textContent      = x + '%';
+        document.getElementById('currentY').textContent      = y + '%';
+        document.getElementById('currentSize').textContent   = size + 'px';
+        document.getElementById('currentColor').textContent  = color;
+        document.getElementById('currentFont').textContent   = font;
+        document.getElementById('currentStyle').textContent  = style;
         document.getElementById('currentWeight').textContent = weight;
 
-        // Build font string
-        let fontString = '';
-        if (style !== 'normal') fontString += style + ' ';
-        if (weight !== 'normal') fontString += weight + ' ';
-        fontString += size + 'px ' + font;
+        // Sync the color hex display and swatch pill
+        const colorHexEl   = document.getElementById('colorHex');
+        const colorSwatchEl = document.getElementById('colorSwatch');
+        if (colorHexEl)   colorHexEl.textContent = color;
+        if (colorSwatchEl) colorSwatchEl.style.background = color;
 
-        // Update preview
-        namePreview.style.left = x + '%';
-        namePreview.style.top = y + '%';
-        namePreview.style.font = fontString;
-        namePreview.style.color = color;
-        namePreview.style.transform = 'translate(-50%, -50%)';
+        // Re-render canvas with new settings
+        drawCanvasPreview();
     }
 
-    // Preview on actual template
+    // "Open Full Size" — export the canvas as PNG and open it in a new tab
     function previewOnTemplate() {
-        const certificateFile = certificateTemplateInput.files[0];
-        if (!certificateFile) {
+        if (!templateImage) {
             showError('Please upload a certificate template first.');
             return;
         }
-
-        // Show loading state
-        const previewBtn = document.getElementById('previewOnTemplate');
-        const originalText = previewBtn.innerHTML;
-        previewBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Preview...';
-        previewBtn.disabled = true;
-
-        const formData = new FormData();
-        formData.append('certificateTemplate', certificateFile);
-        formData.append('nameX', nameX.value);
-        formData.append('nameY', nameY.value);
-        formData.append('nameSize', nameSize.value);
-        formData.append('nameColor', nameColor.value);
-        formData.append('nameFont', nameFont.value);
-        formData.append('nameStyle', nameStyle.value);
-        formData.append('nameWeight', nameWeight.value);
-        formData.append('previewName', 'Sample Name');
-
-        fetch('/preview', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => {
-                    throw new Error(err.error || 'Preview generation failed');
-                });
-            }
-            return response.blob();
-        })
-        .then(blob => {
+        // The canvas already holds the current render; export it
+        certificateCanvas.toBlob(function(blob) {
             const url = URL.createObjectURL(blob);
-            const newWindow = window.open(url, '_blank');
-            if (newWindow) {
-                newWindow.document.title = 'Certificate Preview';
-            } else {
-                // Fallback: show in current window
-                window.location.href = url;
-            }
-        })
-        .catch(error => {
-            console.error('Error generating preview:', error);
-            showError('Error generating preview: ' + error.message);
-        })
-        .finally(() => {
-            // Reset button state
-            previewBtn.innerHTML = originalText;
-            previewBtn.disabled = false;
-        });
+            const win = window.open(url, '_blank');
+            if (win) win.document.title = 'Certificate Preview';
+        }, 'image/png');
     }
 
     // Reset position to default values
@@ -395,29 +511,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Show progress
     function showProgress() {
-        progressSection.style.display = 'block';
+        progressSection.style.display = 'flex';
         resultsSection.style.display = 'none';
         errorSection.style.display = 'none';
-        
-        // Simulate progress animation
+
         let progress = 0;
         const interval = setInterval(() => {
-            progress += Math.random() * 15;
+            progress += Math.random() * 12;
             if (progress > 90) progress = 90;
             progressFill.style.width = progress + '%';
-            progressText.textContent = 'Processing files...';
-        }, 200);
-
-        // Store interval for cleanup
+            progressText.textContent = 'Generating certificates…';
+        }, 250);
         window.progressInterval = interval;
     }
 
     // Hide progress
     function hideProgress() {
         progressSection.style.display = 'none';
-        if (window.progressInterval) {
-            clearInterval(window.progressInterval);
-        }
+        if (window.progressInterval) clearInterval(window.progressInterval);
         progressFill.style.width = '0%';
     }
 
@@ -425,29 +536,65 @@ document.addEventListener('DOMContentLoaded', function() {
     function showResults(result) {
         resultsSection.style.display = 'block';
         errorSection.style.display = 'none';
-        
+
         resultsMessage.textContent = result.message;
-        
-        // Display uploaded files
-        uploadedFiles.innerHTML = '';
-        if (result.uploadedFiles && result.uploadedFiles.length > 0) {
-            result.uploadedFiles.forEach(file => {
-                const fileLink = document.createElement('a');
-                fileLink.href = file.link;
-                fileLink.target = '_blank';
-                fileLink.className = 'file-link';
-                fileLink.innerHTML = `
-                    <i class="fas fa-external-link-alt"></i>
-                    <div>
-                        <div class="file-name">${file.name}</div>
-                        <div class="file-size">Click to view in Google Drive</div>
-                    </div>
-                `;
-                uploadedFiles.appendChild(fileLink);
+        resultsTableBody.innerHTML = '';
+
+        if (result.recipientResults && result.recipientResults.length > 0) {
+            result.recipientResults.forEach((res, idx) => {
+                const tr = document.createElement('tr');
+
+                // Row number
+                const tdNum = document.createElement('td');
+                tdNum.textContent = idx + 1;
+                tdNum.style.color = 'var(--text-muted)';
+                tdNum.style.fontVariantNumeric = 'tabular-nums';
+                tr.appendChild(tdNum);
+
+                // Name
+                const tdName = document.createElement('td');
+                tdName.textContent = res.name;
+                tdName.style.fontWeight = '600';
+                tr.appendChild(tdName);
+
+                // Email
+                const tdEmail = document.createElement('td');
+                tdEmail.textContent = res.email;
+                tdEmail.style.color = 'var(--text-secondary)';
+                tr.appendChild(tdEmail);
+
+                // Google Drive Link
+                const tdLink = document.createElement('td');
+                if (res.driveLink && res.driveLink !== '#') {
+                    const a = document.createElement('a');
+                    a.href = res.driveLink;
+                    a.target = '_blank';
+                    a.innerHTML = '<i class="fab fa-google-drive"></i> Open in Drive';
+                    tdLink.appendChild(a);
+                } else {
+                    tdLink.innerHTML = '<span style="color:var(--text-muted)">Not uploaded</span>';
+                }
+                tr.appendChild(tdLink);
+
+                // Email Status badge
+                const tdStatus = document.createElement('td');
+                let badgeClass = 'badge-na';
+                let icon = 'fa-minus';
+                const s = res.emailStatus || 'N/A';
+                if (s === 'Sent')         { badgeClass = 'badge-sent';    icon = 'fa-check'; }
+                else if (s === 'Skipped') { badgeClass = 'badge-skipped'; icon = 'fa-forward'; }
+                else if (s.startsWith('Failed')) { badgeClass = 'badge-failed'; icon = 'fa-xmark'; }
+                tdStatus.innerHTML = `<span class="badge-status ${badgeClass}"><i class="fas ${icon}"></i> ${s}</span>`;
+                tr.appendChild(tdStatus);
+
+                resultsTableBody.appendChild(tr);
             });
+        } else {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="5" style="text-align:center;color:var(--text-muted)">No recipient data returned.</td>';
+            resultsTableBody.appendChild(tr);
         }
 
-        // Scroll to results
         resultsSection.scrollIntoView({ behavior: 'smooth' });
     }
 
@@ -468,7 +615,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Disable form
     function disableForm() {
         generateBtn.disabled = true;
-        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+        generateBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Generating…';
         certificateTemplateInput.disabled = true;
         excelFileInput.disabled = true;
         resetBtn.disabled = true;
@@ -477,7 +624,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Enable form
     function enableForm() {
         generateBtn.disabled = false;
-        generateBtn.innerHTML = '<i class="fas fa-magic"></i> Generate Certificates';
+        generateBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Generate Certificates';
         certificateTemplateInput.disabled = false;
         excelFileInput.disabled = false;
         resetBtn.disabled = false;
@@ -498,6 +645,18 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Reset position settings
         resetPosition();
+        
+        // Clear canvas and show placeholder again
+        templateImage = null;
+        canvasCtx.clearRect(0, 0, certificateCanvas.width, certificateCanvas.height);
+        certificateCanvas.width  = 0;
+        certificateCanvas.height = 0;
+        certificateCanvas.style.display = 'none';
+        canvasPlaceholder.style.display  = 'flex';
+        document.getElementById('previewHint').textContent = 'Upload a template image to see a live preview';
+
+        // Hide email fields
+        emailFieldsContainer.style.display = 'none';
         
         // Reset progress
         progressFill.style.width = '0%';
@@ -552,4 +711,26 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // Load default template for preview on page load
+    function loadDefaultTemplate() {
+        const defaultSrc = 'printable-certificates-without-borders-3.jpg';
+        const img = new Image();
+        img.onload = function() {
+            templateImage = img;
+            // Size canvas to full image resolution
+            certificateCanvas.width  = img.naturalWidth;
+            certificateCanvas.height = img.naturalHeight;
+            // Show canvas, hide placeholder
+            certificateCanvas.style.display = 'block';
+            canvasPlaceholder.style.display  = 'none';
+            document.getElementById('previewHint').textContent =
+                `${img.naturalWidth} × ${img.naturalHeight}px — drag sliders to position`;
+            drawCanvasPreview();
+        };
+        img.onerror = function() {
+            console.warn('Default template image not found at public/printable-certificates-without-borders-3.jpg');
+        };
+        img.src = defaultSrc;
+    }
 }); 
