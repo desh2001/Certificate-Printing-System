@@ -204,24 +204,45 @@ app.post('/preview', previewUpload.single('certificateTemplate'), async (req, re
         const nameWeight = req.body.nameWeight || 'normal';
         const previewName = req.body.previewName || 'Sample Name';
 
+        const teamX = parseFloat(req.body.teamX || 50);
+        const teamY = parseFloat(req.body.teamY || 60);
+        const teamSize = parseInt(req.body.teamSize || 36);
+        const teamColor = req.body.teamColor || '#7c3aed';
+        const teamFont = req.body.teamFont || 'Arial';
+        const teamStyle = req.body.teamStyle || 'normal';
+        const teamWeight = req.body.teamWeight || 'normal';
+        const previewTeam = req.body.previewTeam || 'Sample Team';
+
         console.log('Preview request:', {
             templatePath,
             nameX,
             nameY,
             nameSize,
             nameColor,
-            previewName
+            previewName,
+            teamX,
+            teamY,
+            teamSize,
+            teamColor,
+            previewTeam
         });
 
         // Generate preview certificate
-        const previewPath = await generateCertificates(templatePath, [previewName], {
-            x: nameX,
-            y: nameY,
-            size: nameSize,
-            color: nameColor,
-            font: nameFont,
-            style: nameStyle,
-            weight: nameWeight
+        const previewPath = await generateCertificates(templatePath, [{ name: previewName, team: previewTeam }], {
+            nameX,
+            nameY,
+            nameSize,
+            nameColor,
+            nameFont,
+            nameStyle,
+            nameWeight,
+            teamX,
+            teamY,
+            teamSize,
+            teamColor,
+            teamFont,
+            teamStyle,
+            teamWeight
         });
 
         console.log('Preview generated at:', previewPath[0]);
@@ -276,11 +297,12 @@ app.post('/upload', upload.fields([
         const worksheet = workbook.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-        // Extract recipients (Name from first column, Email from second column, skip header)
+        // Extract recipients (Name from first column, Email from second column, Team from third column, skip header)
         const recipients = rows.slice(1).map(row => {
             const name = row[0] ? row[0].toString().trim() : '';
             const email = row[1] ? row[1].toString().trim() : '';
-            return { name, email };
+            const team = row[2] ? row[2].toString().trim() : '';
+            return { name, email, team };
         }).filter(recipient => recipient.name);
 
         if (recipients.length === 0) {
@@ -316,6 +338,14 @@ app.post('/upload', upload.fields([
         const nameStyle = req.body.nameStyle || 'normal';
         const nameWeight = req.body.nameWeight || 'normal';
 
+        const teamX = parseFloat(req.body.teamX || 50);
+        const teamY = parseFloat(req.body.teamY || 60);
+        const teamSize = parseInt(req.body.teamSize || 36);
+        const teamColor = req.body.teamColor || '#7c3aed';
+        const teamFont = req.body.teamFont || 'Arial';
+        const teamStyle = req.body.teamStyle || 'normal';
+        const teamWeight = req.body.teamWeight || 'normal';
+
         // Check if user is authenticated with Google Drive
         if (!req.session.tokens || !req.session.tokens.access_token) {
             // Clean up before returning error
@@ -328,16 +358,22 @@ app.post('/upload', upload.fields([
         }
 
         // Generate certificates
-        const certificateNames = recipients.map(r => r.name);
-        console.log('Generating certificates with settings:', { nameX, nameY, nameSize, nameColor, nameFont, nameStyle, nameWeight });
-        generatedCertificates = await generateCertificates(templatePath, certificateNames, {
-            x: nameX,
-            y: nameY,
-            size: nameSize,
-            color: nameColor,
-            font: nameFont,
-            style: nameStyle,
-            weight: nameWeight
+        console.log('Generating certificates with settings:', { nameX, nameY, nameSize, nameColor, nameFont, nameStyle, nameWeight, teamX, teamY, teamSize, teamColor, teamFont, teamStyle, teamWeight });
+        generatedCertificates = await generateCertificates(templatePath, recipients, {
+            nameX,
+            nameY,
+            nameSize,
+            nameColor,
+            nameFont,
+            nameStyle,
+            nameWeight,
+            teamX,
+            teamY,
+            teamSize,
+            teamColor,
+            teamFont,
+            teamStyle,
+            teamWeight
         });
 
         // Set credentials from session and upload to Google Drive
@@ -362,8 +398,8 @@ app.post('/upload', upload.fields([
                         emailStatus = 'Failed (Invalid email format)';
                     } else {
                         try {
-                            const subject = emailSubject.replace(/{name}/g, recipient.name);
-                            const text = emailBody.replace(/{name}/g, recipient.name);
+                            const subject = emailSubject.replace(/{name}/g, recipient.name).replace(/{team}/g, recipient.team || '');
+                            const text = emailBody.replace(/{name}/g, recipient.name).replace(/{team}/g, recipient.team || '');
                             
                             const mailOptions = {
                                 from: process.env.EMAIL_FROM || process.env.SMTP_USER,
@@ -391,6 +427,7 @@ app.post('/upload', upload.fields([
             recipientResults.push({
                 name: recipient.name,
                 email: recipient.email || 'N/A',
+                team: recipient.team || 'N/A',
                 driveLink: driveFile ? driveFile.link : '#',
                 driveFileId: driveFile ? driveFile.id : null,
                 emailStatus: emailStatus
@@ -429,19 +466,28 @@ app.post('/upload', upload.fields([
     }
 });
 
-// Generate certificates with names
-async function generateCertificates(templatePath, names, positionSettings = {}) {
+// Generate certificates with names and teams
+async function generateCertificates(templatePath, recipients, positionSettings = {}) {
     const generatedPaths = [];
     
-    // Default position settings
+    // Default position settings with backward compatibility fallbacks
     const settings = {
-        x: 50, // percentage from left
-        y: 50, // percentage from top
-        size: 48, // font size in pixels
-        color: '#000000', // text color
-        font: 'Arial', // font family
-        style: 'normal', // font style
-        weight: 'normal', // font weight
+        nameX: positionSettings.x !== undefined ? positionSettings.x : (positionSettings.nameX || 50),
+        nameY: positionSettings.y !== undefined ? positionSettings.y : (positionSettings.nameY || 50),
+        nameSize: positionSettings.size !== undefined ? positionSettings.size : (positionSettings.nameSize || 48),
+        nameColor: positionSettings.color !== undefined ? positionSettings.color : (positionSettings.nameColor || '#000000'),
+        nameFont: positionSettings.font !== undefined ? positionSettings.font : (positionSettings.nameFont || 'Arial'),
+        nameStyle: positionSettings.style !== undefined ? positionSettings.style : (positionSettings.nameStyle || 'normal'),
+        nameWeight: positionSettings.weight !== undefined ? positionSettings.weight : (positionSettings.nameWeight || 'normal'),
+        
+        teamX: positionSettings.teamX || 50,
+        teamY: positionSettings.teamY || 60,
+        teamSize: positionSettings.teamSize || 36,
+        teamColor: positionSettings.teamColor || '#7c3aed',
+        teamFont: positionSettings.teamFont || 'Arial',
+        teamStyle: positionSettings.teamStyle || 'normal',
+        teamWeight: positionSettings.teamWeight || 'normal',
+        
         ...positionSettings
     };
     
@@ -450,9 +496,11 @@ async function generateCertificates(templatePath, names, positionSettings = {}) 
         const template = await loadImage(templatePath);
         console.log('Template loaded, dimensions:', template.width, 'x', template.height);
         
-        for (let i = 0; i < names.length; i++) {
-            const name = names[i];
-            console.log('Generating certificate for:', name);
+        for (let i = 0; i < recipients.length; i++) {
+            const item = recipients[i];
+            const name = typeof item === 'object' ? (item.name || '') : item;
+            const team = typeof item === 'object' ? (item.team || '') : '';
+            console.log(`Generating certificate for name="${name}", team="${team}"`);
             
             const canvas = createCanvas(template.width, template.height);
             const ctx = canvas.getContext('2d');
@@ -460,34 +508,51 @@ async function generateCertificates(templatePath, names, positionSettings = {}) 
             // Draw the template
             ctx.drawImage(template, 0, 0);
             
-            // Configure text style for the name
-            // Quote font families that contain spaces (e.g. "Times New Roman")
-            // so the canvas font-shorthand parser handles them correctly.
-            const fontFamily = settings.font.includes(' ')
-                ? `"${settings.font}"`
-                : settings.font;
+            // 1. Draw Name
+            const nameFontFamily = settings.nameFont.includes(' ')
+                ? `"${settings.nameFont}"`
+                : settings.nameFont;
 
-            let fontString = '';
-            if (settings.style !== 'normal') fontString += settings.style + ' ';
-            if (settings.weight !== 'normal') fontString += settings.weight + ' ';
-            fontString += `${settings.size}px ${fontFamily}`;
+            let nameFontString = '';
+            if (settings.nameStyle !== 'normal') nameFontString += settings.nameStyle + ' ';
+            if (settings.nameWeight !== 'normal') nameFontString += settings.nameWeight + ' ';
+            nameFontString += `${settings.nameSize}px ${nameFontFamily}`;
             
-            ctx.font = fontString;
-            ctx.fillStyle = settings.color;
+            ctx.font = nameFontString;
+            ctx.fillStyle = settings.nameColor;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             
-            // Calculate position for the name based on percentage
-            const x = (canvas.width * settings.x) / 100;
-            const y = (canvas.height * settings.y) / 100;
+            const nx = (canvas.width * settings.nameX) / 100;
+            const ny = (canvas.height * settings.nameY) / 100;
             
-            console.log('Text position:', { x, y, settings });
-            
-            // Add the name to the certificate
-            ctx.fillText(name, x, y);
+            ctx.fillText(name, nx, ny);
+
+            // 2. Draw Team (only if present)
+            if (team) {
+                const teamFontFamily = settings.teamFont.includes(' ')
+                    ? `"${settings.teamFont}"`
+                    : settings.teamFont;
+
+                let teamFontString = '';
+                if (settings.teamStyle !== 'normal') teamFontString += settings.teamStyle + ' ';
+                if (settings.teamWeight !== 'normal') teamFontString += settings.teamWeight + ' ';
+                teamFontString += `${settings.teamSize}px ${teamFontFamily}`;
+                
+                ctx.font = teamFontString;
+                ctx.fillStyle = settings.teamColor;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                const tx = (canvas.width * settings.teamX) / 100;
+                const ty = (canvas.height * settings.teamY) / 100;
+                
+                ctx.fillText(team, tx, ty);
+            }
             
             // Save the certificate
-            const outputPath = path.join(certificatesDir, `certificate_${name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.png`);
+            const safeName = name ? name.replace(/[^a-zA-Z0-9]/g, '_') : 'recipient';
+            const outputPath = path.join(certificatesDir, `certificate_${safeName}_${Date.now()}.png`);
             const buffer = canvas.toBuffer('image/png');
             fs.writeFileSync(outputPath, buffer);
             

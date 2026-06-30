@@ -37,6 +37,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const nameYValue = document.getElementById('nameYValue');
     const nameSizeValue = document.getElementById('nameSizeValue');
 
+    const teamX = document.getElementById('teamX');
+    const teamY = document.getElementById('teamY');
+    const teamSize = document.getElementById('teamSize');
+    const teamColor = document.getElementById('teamColor');
+    const teamFont = document.getElementById('teamFont');
+    const teamStyle = document.getElementById('teamStyle');
+    const teamWeight = document.getElementById('teamWeight');
+    const teamXValue = document.getElementById('teamXValue');
+    const teamYValue = document.getElementById('teamYValue');
+    const teamSizeValue = document.getElementById('teamSizeValue');
+
     // Canvas preview elements
     const certificateCanvas = document.getElementById('certificateCanvas');
     const canvasCtx = certificateCanvas.getContext('2d');
@@ -67,13 +78,46 @@ document.addEventListener('DOMContentLoaded', function() {
     nameStyle.addEventListener('change', updateNamePreview);
     nameWeight.addEventListener('change', updateNamePreview);
 
-    // Color preset dots
-    document.querySelectorAll('.color-dot').forEach(dot => {
+    teamX.addEventListener('input', updateNamePreview);
+    teamY.addEventListener('input', updateNamePreview);
+    teamSize.addEventListener('input', updateNamePreview);
+    teamColor.addEventListener('input', updateNamePreview);
+    teamFont.addEventListener('change', updateNamePreview);
+    teamStyle.addEventListener('change', updateNamePreview);
+    teamWeight.addEventListener('change', updateNamePreview);
+
+    // Color preset dots - Name
+    document.querySelectorAll('.color-dot-name').forEach(dot => {
         dot.addEventListener('click', () => {
             nameColor.value = dot.dataset.color;
-            document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+            document.querySelectorAll('.color-dot-name').forEach(d => d.classList.remove('active'));
             dot.classList.add('active');
             updateNamePreview();
+        });
+    });
+
+    // Color preset dots - Team
+    document.querySelectorAll('.color-dot-team').forEach(dot => {
+        dot.addEventListener('click', () => {
+            teamColor.value = dot.dataset.color;
+            document.querySelectorAll('.color-dot-team').forEach(d => d.classList.remove('active'));
+            dot.classList.add('active');
+            updateNamePreview();
+        });
+    });
+
+    // Tab switcher logic
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.dataset.target;
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active-tab-content'));
+            
+            btn.classList.add('active');
+            const targetEl = document.getElementById(targetId);
+            if (targetEl) targetEl.classList.add('active-tab-content');
         });
     });
 
@@ -179,6 +223,14 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('nameFont', nameFont.value);
         formData.append('nameStyle', nameStyle.value);
         formData.append('nameWeight', nameWeight.value);
+
+        formData.append('teamX', teamX.value);
+        formData.append('teamY', teamY.value);
+        formData.append('teamSize', teamSize.value);
+        formData.append('teamColor', teamColor.value);
+        formData.append('teamFont', teamFont.value);
+        formData.append('teamStyle', teamStyle.value);
+        formData.append('teamWeight', teamWeight.value);
 
         // Add email settings to form data
         formData.append('sendEmails', sendEmailsCheckbox.checked);
@@ -293,10 +345,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const H = certificateCanvas.height;
 
         // ── Step 1: Reset ALL canvas text/shadow state before drawing ─────────
-        // Shadow must be cleared BEFORE setting ctx.font — some browsers
-        // re-validate the font property when shadow metrics change, and a
-        // dirty shadow state can cause the font assignment to be silently
-        // discarded.
         canvasCtx.shadowColor   = 'transparent';
         canvasCtx.shadowBlur    = 0;
         canvasCtx.shadowOffsetX = 0;
@@ -308,23 +356,15 @@ document.addEventListener('DOMContentLoaded', function() {
         canvasCtx.clearRect(0, 0, W, H);
         canvasCtx.drawImage(templateImage, 0, 0);
 
-        // ── Step 3: Build CSS font shorthand ──────────────────────────────────
-        // CSS font shorthand syntax:  [style] [weight] size family
-        // Rules the Canvas 2D API enforces:
-        //  • size (with px unit) and family are REQUIRED
-        //  • family names containing spaces MUST be quoted with double-quotes
-        //  • numeric weights (100–900) are valid, but must come before size
-        //  • if the browser can't parse the string it silently keeps the old font
+        // ── Step 3: Draw Member Name ──────────────────────────────────────────
         const sizePx   = Math.max(8, parseInt(nameSize.value)  || 48);
         const style    = nameStyle.value  || 'normal';
         const weight   = nameWeight.value || 'normal';
         const fontName = nameFont.value   || 'Arial';
         const color    = nameColor.value  || '#000000';
 
-        // Quote multi-word families: "Times New Roman", "Comic Sans MS", etc.
         const quotedFamily = fontName.includes(' ') ? `"${fontName}"` : fontName;
 
-        // Assemble: optional style → optional weight → size → family
         const fontParts = [];
         if (style  !== 'normal') fontParts.push(style);
         if (weight !== 'normal') fontParts.push(weight);
@@ -332,30 +372,53 @@ document.addEventListener('DOMContentLoaded', function() {
         fontParts.push(quotedFamily);
         const cssFont = fontParts.join(' ');
 
-        // ── Step 4: Apply font FIRST, then check it was accepted ─────────────
         canvasCtx.textAlign    = 'center';
         canvasCtx.textBaseline = 'middle';
         canvasCtx.font         = cssFont;
 
-        // Read back: if the browser rejected the string it reverts to the
-        // previous value.  Log both so DevTools shows what actually rendered.
-        const appliedFont = canvasCtx.font;
-        console.log(`[Preview] requested="${cssFont}"  applied="${appliedFont}"`);
-
-        // ── Step 5: Shadow (applied after font to avoid repaint conflicts) ─────
         const dark = isColorDark(color);
         canvasCtx.shadowColor   = dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.35)';
         canvasCtx.shadowBlur    = Math.max(2, sizePx * 0.04);
         canvasCtx.shadowOffsetX = 0;
         canvasCtx.shadowOffsetY = 0;
 
-        // ── Step 6: Draw text ─────────────────────────────────────────────────
         const px = (W * parseFloat(nameX.value)) / 100;
         const py = (H * parseFloat(nameY.value)) / 100;
         canvasCtx.fillStyle = color;
         canvasCtx.fillText('Sample Name', px, py);
 
-        // Clear shadow so future clearRect / drawImage calls are clean
+        // Clear shadow before drawing team layer
+        canvasCtx.shadowColor = 'transparent';
+        canvasCtx.shadowBlur  = 0;
+
+        // ── Step 4: Draw Team Name ──────────────────────────────────────────
+        const teamSizePx   = Math.max(8, parseInt(teamSize.value)  || 36);
+        const teamStyleVal = teamStyle.value  || 'normal';
+        const teamWeightVal= teamWeight.value || 'normal';
+        const teamFontName = teamFont.value   || 'Arial';
+        const teamColorVal = teamColor.value  || '#7c3aed';
+
+        const quotedTeamFamily = teamFontName.includes(' ') ? `"${teamFontName}"` : teamFontName;
+
+        const teamFontParts = [];
+        if (teamStyleVal  !== 'normal') teamFontParts.push(teamStyleVal);
+        if (teamWeightVal !== 'normal') teamFontParts.push(teamWeightVal);
+        teamFontParts.push(`${teamSizePx}px`);
+        teamFontParts.push(quotedTeamFamily);
+        const cssTeamFont = teamFontParts.join(' ');
+
+        canvasCtx.font = cssTeamFont;
+
+        const teamDark = isColorDark(teamColorVal);
+        canvasCtx.shadowColor   = teamDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.35)';
+        canvasCtx.shadowBlur    = Math.max(2, teamSizePx * 0.04);
+
+        const tx = (W * parseFloat(teamX.value)) / 100;
+        const ty = (H * parseFloat(teamY.value)) / 100;
+        canvasCtx.fillStyle = teamColorVal;
+        canvasCtx.fillText('Sample Team', tx, ty);
+
+        // Clear shadow
         canvasCtx.shadowColor = 'transparent';
         canvasCtx.shadowBlur  = 0;
     }
@@ -376,29 +439,42 @@ document.addEventListener('DOMContentLoaded', function() {
         const y      = nameY.value;
         const size   = nameSize.value;
         const color  = nameColor.value;
-        const font   = nameFont.value;
-        const style  = nameStyle.value;
-        const weight = nameWeight.value;
+
+        const tx     = teamX.value;
+        const ty     = teamY.value;
+        const tsize  = teamSize.value;
+        const tcolor = teamColor.value;
 
         // Update display values
         nameXValue.textContent = x + '%';
         nameYValue.textContent = y + '%';
         nameSizeValue.textContent = size + 'px';
 
+        teamXValue.textContent = tx + '%';
+        teamYValue.textContent = ty + '%';
+        teamSizeValue.textContent = tsize + 'px';
+
         // Update current-settings readout
         document.getElementById('currentX').textContent      = x + '%';
         document.getElementById('currentY').textContent      = y + '%';
         document.getElementById('currentSize').textContent   = size + 'px';
         document.getElementById('currentColor').textContent  = color;
-        document.getElementById('currentFont').textContent   = font;
-        document.getElementById('currentStyle').textContent  = style;
-        document.getElementById('currentWeight').textContent = weight;
+
+        document.getElementById('currentTeamX').textContent      = tx + '%';
+        document.getElementById('currentTeamY').textContent      = ty + '%';
+        document.getElementById('currentTeamSize').textContent   = tsize + 'px';
+        document.getElementById('currentTeamColor').textContent  = tcolor;
 
         // Sync the color hex display and swatch pill
         const colorHexEl   = document.getElementById('colorHex');
         const colorSwatchEl = document.getElementById('colorSwatch');
         if (colorHexEl)   colorHexEl.textContent = color;
         if (colorSwatchEl) colorSwatchEl.style.background = color;
+
+        const teamColorHexEl   = document.getElementById('teamColorHex');
+        const teamColorSwatchEl = document.getElementById('teamColorSwatch');
+        if (teamColorHexEl)   teamColorHexEl.textContent = tcolor;
+        if (teamColorSwatchEl) teamColorSwatchEl.style.background = tcolor;
 
         // Re-render canvas with new settings
         drawCanvasPreview();
@@ -427,6 +503,15 @@ document.addEventListener('DOMContentLoaded', function() {
         nameFont.value = 'Arial';
         nameStyle.value = 'normal';
         nameWeight.value = 'normal';
+
+        teamX.value = 50;
+        teamY.value = 60;
+        teamSize.value = 36;
+        teamColor.value = '#7c3aed';
+        teamFont.value = 'Times New Roman';
+        teamStyle.value = 'italic';
+        teamWeight.value = 'normal';
+
         updateNamePreview();
     }
 
@@ -556,6 +641,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 tdName.textContent = res.name;
                 tdName.style.fontWeight = '600';
                 tr.appendChild(tdName);
+
+                // Team Name
+                const tdTeam = document.createElement('td');
+                tdTeam.textContent = res.team || 'N/A';
+                tdTeam.style.color = 'var(--text-secondary)';
+                tr.appendChild(tdTeam);
 
                 // Email
                 const tdEmail = document.createElement('td');

@@ -588,12 +588,72 @@ input[type="file"] { display: none; }
 }
 .canvas-placeholder i { font-size: 2.5rem; color: rgba(124,58,237,0.3); }
 
+/* ── Tabbed Controls ── */
+.tabs-header {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 4px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+}
+.tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 8px 12px;
+    border-radius: calc(var(--radius-md) - 2px);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: var(--font);
+}
+.tab-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.02);
+}
+.tab-btn.active {
+    color: #ffffff;
+    background: var(--accent-grad);
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.25);
+}
+.tab-content {
+    display: none;
+}
+.tab-content.active-tab-content {
+    display: block;
+    animation: slideDown 0.3s ease;
+}
+
 /* Settings pills row */
 .settings-pills {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    flex-direction: column;
+    gap: 8px;
     margin-top: 12px;
+}
+.pills-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+.pill-group-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    min-width: 50px;
+    display: inline-block;
 }
 .pill {
     display: inline-flex;

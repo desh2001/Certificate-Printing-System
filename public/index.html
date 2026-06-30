@@ -89,7 +89,7 @@
                         <div class="card-icon card-icon--green"><i class="fas fa-file-excel"></i></div>
                         <div>
                             <h2 class="card-title">Recipients List</h2>
-                            <p class="card-desc">Excel file — Names in column A, Emails in column B</p>
+                            <p class="card-desc">Excel file — Names in Col A, Emails in Col B, Teams in Col C</p>
                         </div>
                     </div>
                     <label for="excelFile" class="dropzone dropzone--green" id="excelDropzone">
@@ -131,10 +131,10 @@
                             <input type="text" id="emailSubject" class="field-input" value="Your Certificate of Completion" placeholder="Email subject…">
                         </div>
                         <div class="field-group">
-                            <label class="field-label" for="emailBody">Message Body <span class="badge-tip">use {name} for recipient's name</span></label>
+                            <label class="field-label" for="emailBody">Message Body <span class="badge-tip">use {name} for name, {team} for team</span></label>
                             <textarea id="emailBody" class="field-input field-textarea" rows="5" placeholder="Your message…">Dear {name},
 
-Congratulations! Please find your certificate attached to this email.
+Congratulations! Please find your certificate for the {team} attached to this email.
 
 Best regards,
 Certificate Team</textarea>
@@ -154,94 +154,194 @@ Certificate Team</textarea>
                         <div class="card-icon card-icon--violet"><i class="fas fa-pen-nib"></i></div>
                         <div>
                             <h2 class="card-title">Text Styling &amp; Position</h2>
-                            <p class="card-desc">Drag the sliders to position the name perfectly</p>
+                            <p class="card-desc">Drag the sliders to position the texts perfectly</p>
                         </div>
                     </div>
 
-                    <div class="controls-grid">
-                        <!-- X Position -->
-                        <div class="ctrl">
-                            <div class="ctrl-header">
-                                <label class="ctrl-label" for="nameX"><i class="fas fa-arrows-left-right"></i> X Position</label>
-                                <span class="ctrl-val" id="nameXValue">50%</span>
+                    <div class="tabs-header">
+                        <button type="button" class="tab-btn active" data-target="name-controls-grid">
+                            <i class="fas fa-user"></i> Member Name
+                        </button>
+                        <button type="button" class="tab-btn" data-target="team-controls-grid">
+                            <i class="fas fa-users"></i> Team Name
+                        </button>
+                    </div>
+
+                    <div id="name-controls-grid" class="tab-content active-tab-content">
+                        <div class="controls-grid">
+                            <!-- X Position -->
+                            <div class="ctrl">
+                                <div class="ctrl-header">
+                                    <label class="ctrl-label" for="nameX"><i class="fas fa-arrows-left-right"></i> X Position</label>
+                                    <span class="ctrl-val" id="nameXValue">50%</span>
+                                </div>
+                                <input type="range" id="nameX" min="0" max="100" value="50" class="slider">
                             </div>
-                            <input type="range" id="nameX" min="0" max="100" value="50" class="slider">
-                        </div>
-                        <!-- Y Position -->
-                        <div class="ctrl">
-                            <div class="ctrl-header">
-                                <label class="ctrl-label" for="nameY"><i class="fas fa-arrows-up-down"></i> Y Position</label>
-                                <span class="ctrl-val" id="nameYValue">50%</span>
+                            <!-- Y Position -->
+                            <div class="ctrl">
+                                <div class="ctrl-header">
+                                    <label class="ctrl-label" for="nameY"><i class="fas fa-arrows-up-down"></i> Y Position</label>
+                                    <span class="ctrl-val" id="nameYValue">50%</span>
+                                </div>
+                                <input type="range" id="nameY" min="0" max="100" value="50" class="slider">
                             </div>
-                            <input type="range" id="nameY" min="0" max="100" value="50" class="slider">
-                        </div>
-                        <!-- Font Size -->
-                        <div class="ctrl">
-                            <div class="ctrl-header">
-                                <label class="ctrl-label" for="nameSize"><i class="fas fa-text-height"></i> Font Size</label>
-                                <span class="ctrl-val" id="nameSizeValue">48px</span>
+                            <!-- Font Size -->
+                            <div class="ctrl">
+                                <div class="ctrl-header">
+                                    <label class="ctrl-label" for="nameSize"><i class="fas fa-text-height"></i> Font Size</label>
+                                    <span class="ctrl-val" id="nameSizeValue">48px</span>
+                                </div>
+                                <input type="range" id="nameSize" min="12" max="160" value="48" class="slider">
                             </div>
-                            <input type="range" id="nameSize" min="12" max="160" value="48" class="slider">
-                        </div>
-                        <!-- Color -->
-                        <div class="ctrl ctrl--inline">
-                            <label class="ctrl-label" for="nameColor"><i class="fas fa-palette"></i> Text Color</label>
-                            <div class="color-row">
-                                <input type="color" id="nameColor" value="#000000" class="color-picker">
-                                <span class="color-val" id="colorHex">#000000</span>
-                                <div class="color-presets">
-                                    <button type="button" class="color-dot" style="background:#000000" data-color="#000000" title="Black"></button>
-                                    <button type="button" class="color-dot" style="background:#ffffff;border:1px solid #ccc" data-color="#ffffff" title="White"></button>
-                                    <button type="button" class="color-dot" style="background:#1a56db" data-color="#1a56db" title="Blue"></button>
-                                    <button type="button" class="color-dot" style="background:#c0392b" data-color="#c0392b" title="Red"></button>
-                                    <button type="button" class="color-dot" style="background:#b7791f" data-color="#b7791f" title="Gold"></button>
-                                    <button type="button" class="color-dot" style="background:#276749" data-color="#276749" title="Green"></button>
+                            <!-- Color -->
+                            <div class="ctrl ctrl--inline">
+                                <label class="ctrl-label" for="nameColor"><i class="fas fa-palette"></i> Text Color</label>
+                                <div class="color-row">
+                                    <input type="color" id="nameColor" value="#000000" class="color-picker">
+                                    <span class="color-val" id="colorHex">#000000</span>
+                                    <div class="color-presets">
+                                        <button type="button" class="color-dot color-dot-name active" style="background:#000000" data-color="#000000" title="Black"></button>
+                                        <button type="button" class="color-dot color-dot-name" style="background:#ffffff;border:1px solid #ccc" data-color="#ffffff" title="White"></button>
+                                        <button type="button" class="color-dot color-dot-name" style="background:#1a56db" data-color="#1a56db" title="Blue"></button>
+                                        <button type="button" class="color-dot color-dot-name" style="background:#c0392b" data-color="#c0392b" title="Red"></button>
+                                        <button type="button" class="color-dot color-dot-name" style="background:#b7791f" data-color="#b7791f" title="Gold"></button>
+                                        <button type="button" class="color-dot color-dot-name" style="background:#276749" data-color="#276749" title="Green"></button>
+                                    </div>
                                 </div>
                             </div>
+                            <!-- Font Family -->
+                            <div class="ctrl">
+                                <label class="ctrl-label" for="nameFont"><i class="fas fa-font"></i> Font Family</label>
+                                <select id="nameFont" class="field-select">
+                                    <option value="Arial">Arial</option>
+                                    <option value="Times New Roman">Times New Roman</option>
+                                    <option value="Helvetica">Helvetica</option>
+                                    <option value="Georgia">Georgia</option>
+                                    <option value="Verdana">Verdana</option>
+                                    <option value="Courier New">Courier New</option>
+                                    <option value="Impact">Impact</option>
+                                    <option value="Comic Sans MS">Comic Sans MS</option>
+                                    <option value="Trebuchet MS">Trebuchet MS</option>
+                                    <option value="Lucida Console">Lucida Console</option>
+                                    <option value="Palatino">Palatino</option>
+                                    <option value="Garamond">Garamond</option>
+                                    <option value="Century Gothic">Century Gothic</option>
+                                </select>
+                            </div>
+                            <!-- Font Style -->
+                            <div class="ctrl">
+                                <label class="ctrl-label" for="nameStyle"><i class="fas fa-italic"></i> Font Style</label>
+                                <select id="nameStyle" class="field-select">
+                                    <option value="normal">Normal</option>
+                                    <option value="italic">Italic</option>
+                                    <option value="oblique">Oblique</option>
+                                </select>
+                            </div>
+                            <!-- Font Weight -->
+                            <div class="ctrl">
+                                <label class="ctrl-label" for="nameWeight"><i class="fas fa-bold"></i> Font Weight</label>
+                                <select id="nameWeight" class="field-select">
+                                    <option value="normal">Normal</option>
+                                    <option value="bold">Bold</option>
+                                    <option value="100">Thin (100)</option>
+                                    <option value="300">Light (300)</option>
+                                    <option value="400">Regular (400)</option>
+                                    <option value="500">Medium (500)</option>
+                                    <option value="600">Semi Bold (600)</option>
+                                    <option value="700">Bold (700)</option>
+                                    <option value="800">Extra Bold (800)</option>
+                                    <option value="900">Black (900)</option>
+                                </select>
+                            </div>
                         </div>
-                        <!-- Font Family -->
-                        <div class="ctrl">
-                            <label class="ctrl-label" for="nameFont"><i class="fas fa-font"></i> Font Family</label>
-                            <select id="nameFont" class="field-select">
-                                <option value="Arial">Arial</option>
-                                <option value="Times New Roman">Times New Roman</option>
-                                <option value="Helvetica">Helvetica</option>
-                                <option value="Georgia">Georgia</option>
-                                <option value="Verdana">Verdana</option>
-                                <option value="Courier New">Courier New</option>
-                                <option value="Impact">Impact</option>
-                                <option value="Comic Sans MS">Comic Sans MS</option>
-                                <option value="Trebuchet MS">Trebuchet MS</option>
-                                <option value="Lucida Console">Lucida Console</option>
-                                <option value="Palatino">Palatino</option>
-                                <option value="Garamond">Garamond</option>
-                                <option value="Century Gothic">Century Gothic</option>
-                            </select>
-                        </div>
-                        <!-- Font Style -->
-                        <div class="ctrl">
-                            <label class="ctrl-label" for="nameStyle"><i class="fas fa-italic"></i> Font Style</label>
-                            <select id="nameStyle" class="field-select">
-                                <option value="normal">Normal</option>
-                                <option value="italic">Italic</option>
-                                <option value="oblique">Oblique</option>
-                            </select>
-                        </div>
-                        <!-- Font Weight -->
-                        <div class="ctrl">
-                            <label class="ctrl-label" for="nameWeight"><i class="fas fa-bold"></i> Font Weight</label>
-                            <select id="nameWeight" class="field-select">
-                                <option value="normal">Normal</option>
-                                <option value="bold">Bold</option>
-                                <option value="100">Thin (100)</option>
-                                <option value="300">Light (300)</option>
-                                <option value="400">Regular (400)</option>
-                                <option value="500">Medium (500)</option>
-                                <option value="600">Semi Bold (600)</option>
-                                <option value="700">Bold (700)</option>
-                                <option value="800">Extra Bold (800)</option>
-                                <option value="900">Black (900)</option>
-                            </select>
+                    </div>
+
+                    <div id="team-controls-grid" class="tab-content">
+                        <div class="controls-grid">
+                            <!-- X Position -->
+                            <div class="ctrl">
+                                <div class="ctrl-header">
+                                    <label class="ctrl-label" for="teamX"><i class="fas fa-arrows-left-right"></i> X Position</label>
+                                    <span class="ctrl-val" id="teamXValue">50%</span>
+                                </div>
+                                <input type="range" id="teamX" min="0" max="100" value="50" class="slider">
+                            </div>
+                            <!-- Y Position -->
+                            <div class="ctrl">
+                                <div class="ctrl-header">
+                                    <label class="ctrl-label" for="teamY"><i class="fas fa-arrows-up-down"></i> Y Position</label>
+                                    <span class="ctrl-val" id="teamYValue">60%</span>
+                                </div>
+                                <input type="range" id="teamY" min="0" max="100" value="60" class="slider">
+                            </div>
+                            <!-- Font Size -->
+                            <div class="ctrl">
+                                <div class="ctrl-header">
+                                    <label class="ctrl-label" for="teamSize"><i class="fas fa-text-height"></i> Font Size</label>
+                                    <span class="ctrl-val" id="teamSizeValue">36px</span>
+                                </div>
+                                <input type="range" id="teamSize" min="12" max="160" value="36" class="slider">
+                            </div>
+                            <!-- Color -->
+                            <div class="ctrl ctrl--inline">
+                                <label class="ctrl-label" for="teamColor"><i class="fas fa-palette"></i> Text Color</label>
+                                <div class="color-row">
+                                    <input type="color" id="teamColor" value="#7c3aed" class="color-picker">
+                                    <span class="color-val" id="teamColorHex">#7c3aed</span>
+                                    <div class="color-presets">
+                                        <button type="button" class="color-dot color-dot-team" style="background:#000000" data-color="#000000" title="Black"></button>
+                                        <button type="button" class="color-dot color-dot-team" style="background:#ffffff;border:1px solid #ccc" data-color="#ffffff" title="White"></button>
+                                        <button type="button" class="color-dot color-dot-team active" style="background:#7c3aed" data-color="#7c3aed" title="Purple"></button>
+                                        <button type="button" class="color-dot color-dot-team" style="background:#1a56db" data-color="#1a56db" title="Blue"></button>
+                                        <button type="button" class="color-dot color-dot-team" style="background:#c0392b" data-color="#c0392b" title="Red"></button>
+                                        <button type="button" class="color-dot color-dot-team" style="background:#b7791f" data-color="#b7791f" title="Gold"></button>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Font Family -->
+                            <div class="ctrl">
+                                <label class="ctrl-label" for="teamFont"><i class="fas fa-font"></i> Font Family</label>
+                                <select id="teamFont" class="field-select">
+                                    <option value="Arial">Arial</option>
+                                    <option value="Times New Roman" selected>Times New Roman</option>
+                                    <option value="Helvetica">Helvetica</option>
+                                    <option value="Georgia">Georgia</option>
+                                    <option value="Verdana">Verdana</option>
+                                    <option value="Courier New">Courier New</option>
+                                    <option value="Impact">Impact</option>
+                                    <option value="Comic Sans MS">Comic Sans MS</option>
+                                    <option value="Trebuchet MS">Trebuchet MS</option>
+                                    <option value="Lucida Console">Lucida Console</option>
+                                    <option value="Palatino">Palatino</option>
+                                    <option value="Garamond">Garamond</option>
+                                    <option value="Century Gothic">Century Gothic</option>
+                                </select>
+                            </div>
+                            <!-- Font Style -->
+                            <div class="ctrl">
+                                <label class="ctrl-label" for="teamStyle"><i class="fas fa-italic"></i> Font Style</label>
+                                <select id="teamStyle" class="field-select">
+                                    <option value="normal">Normal</option>
+                                    <option value="italic" selected>Italic</option>
+                                    <option value="oblique">Oblique</option>
+                                </select>
+                            </div>
+                            <!-- Font Weight -->
+                            <div class="ctrl">
+                                <label class="ctrl-label" for="teamWeight"><i class="fas fa-bold"></i> Font Weight</label>
+                                <select id="teamWeight" class="field-select">
+                                    <option value="normal" selected>Normal</option>
+                                    <option value="bold">Bold</option>
+                                    <option value="100">Thin (100)</option>
+                                    <option value="300">Light (300)</option>
+                                    <option value="400">Regular (400)</option>
+                                    <option value="500">Medium (500)</option>
+                                    <option value="600">Semi Bold (600)</option>
+                                    <option value="700">Bold (700)</option>
+                                    <option value="800">Extra Bold (800)</option>
+                                    <option value="900">Black (900)</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -259,16 +359,26 @@ Certificate Team</textarea>
                             </div>
                         </div>
                         <div class="settings-pills" id="settingsPills">
-                            <span class="pill"><i class="fas fa-arrows-left-right"></i> <b id="currentX">50%</b></span>
-                            <span class="pill"><i class="fas fa-arrows-up-down"></i> <b id="currentY">50%</b></span>
-                            <span class="pill"><i class="fas fa-text-height"></i> <b id="currentSize">48px</b></span>
-                            <span class="pill"><i class="fas fa-font"></i> <b id="currentFont">Arial</b></span>
-                            <span class="pill"><i class="fas fa-italic"></i> <b id="currentStyle">normal</b></span>
-                            <span class="pill"><i class="fas fa-bold"></i> <b id="currentWeight">normal</b></span>
-                            <span class="pill pill--color">
-                                <span class="pill-swatch" id="colorSwatch" style="background:#000"></span>
-                                <b id="currentColor">#000000</b>
-                            </span>
+                            <div class="pills-row">
+                                <span class="pill-group-title">Name:</span>
+                                <span class="pill"><i class="fas fa-arrows-left-right"></i> <b id="currentX">50%</b></span>
+                                <span class="pill"><i class="fas fa-arrows-up-down"></i> <b id="currentY">50%</b></span>
+                                <span class="pill"><i class="fas fa-text-height"></i> <b id="currentSize">48px</b></span>
+                                <span class="pill pill--color">
+                                    <span class="pill-swatch" id="colorSwatch" style="background:#000"></span>
+                                    <b id="currentColor">#000000</b>
+                                </span>
+                            </div>
+                            <div class="pills-row" style="margin-top: 8px;">
+                                <span class="pill-group-title">Team:</span>
+                                <span class="pill"><i class="fas fa-arrows-left-right"></i> <b id="currentTeamX">50%</b></span>
+                                <span class="pill"><i class="fas fa-arrows-up-down"></i> <b id="currentTeamY">60%</b></span>
+                                <span class="pill"><i class="fas fa-text-height"></i> <b id="currentTeamSize">36px</b></span>
+                                <span class="pill pill--color">
+                                    <span class="pill-swatch" id="teamColorSwatch" style="background:#7c3aed"></span>
+                                    <b id="currentTeamColor">#7c3aed</b>
+                                </span>
+                            </div>
                         </div>
                         <div class="preview-actions">
                             <button type="button" id="previewOnTemplate" class="btn-outline">
@@ -329,6 +439,7 @@ Certificate Team</textarea>
                     <tr>
                         <th>#</th>
                         <th>Recipient Name</th>
+                        <th>Team Name</th>
                         <th>Email Address</th>
                         <th>Google Drive</th>
                         <th>Email Status</th>
